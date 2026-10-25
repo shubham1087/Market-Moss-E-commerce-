@@ -4,19 +4,21 @@ import { CartContext } from './cartContext.js'
 function CartProvider({ children }) {
   const [items, setItems] = useState([])
 
-  const addToCart = useCallback((product) => {
-    if (!product || product.id == null || !Number.isFinite(product.quantity)) {
+  const addToCart = useCallback((product, quantity = 1) => {
+    if (!product || product.id == null || !Number.isFinite(product.quantity)
+      || !Number.isInteger(quantity) || quantity < 1) {
       return { success: false, message: 'This product cannot be added to your bag.' }
     }
 
     const existingItem = items.find((item) => item.id === product.id)
     const currentQuantity = existingItem?.cartQuantity ?? 0
+    const remainingQuantity = product.quantity - currentQuantity
 
-    if (product.quantity <= currentQuantity) {
+    if (quantity > remainingQuantity) {
       return {
         success: false,
-        message: product.quantity > 0
-          ? `Only ${product.quantity} available. Your bag already has the maximum quantity.`
+        message: remainingQuantity > 0
+          ? `Only ${remainingQuantity} more available.`
           : 'This item is out of stock.',
       }
     }
@@ -27,15 +29,20 @@ function CartProvider({ children }) {
       if (currentItem) {
         return currentItems.map((item) => (
           item.id === product.id
-            ? { ...item, ...product, cartQuantity: item.cartQuantity + 1 }
+            ? { ...item, ...product, cartQuantity: item.cartQuantity + quantity }
             : item
         ))
       }
 
-      return [...currentItems, { ...product, cartQuantity: 1 }]
+      return [...currentItems, { ...product, cartQuantity: quantity }]
     })
 
-    return { success: true, message: `${product.name} added to your bag.` }
+    return {
+      success: true,
+      message: quantity === 1
+        ? `${product.name} added to your bag.`
+        : `${quantity} × ${product.name} added to your bag.`,
+    }
   }, [items])
 
   const updateQuantity = useCallback((productId, quantity) => {

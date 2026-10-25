@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import useCart from '../hooks/useCart.js'
 
 function ProductCard({ product }) {
+  const navigate = useNavigate()
   const { addToCart, items } = useCart()
   const [message, setMessage] = useState('')
   const [messageIsError, setMessageIsError] = useState(false)
@@ -22,17 +24,23 @@ function ProductCard({ product }) {
     setMessageIsError(!result.success)
   }
 
-  return (
-    <article className="product-card">
+  function handleCardClick(event) {
+    if (!event.target.closest?.('a, button')) {
+      navigate(`/products/${product.id}`)
+    }
+  }
 
-      <div className="product-image-wrap">
-        <img
-          className="product-image"
-          src={imageUrl}
-          alt={product.name}
-        />
-       
-      </div>
+  return (
+    <article className="product-card" onClick={handleCardClick}>
+      <Link className="product-image-link" to={`/products/${product.id}`} aria-label={`View ${product.name}`}>
+        <div className="product-image-wrap">
+          <img
+            className="product-image"
+            src={imageUrl}
+            alt={product.name}
+          />
+        </div>
+      </Link>
 
       <div className="product-card-content">
 
@@ -40,7 +48,7 @@ function ProductCard({ product }) {
           {product.category?.name || 'Uncategorized'}
         </p>
 
-        <h2>{product.name}</h2>
+        <h2><Link to={`/products/${product.id}`}>{product.name}</Link></h2>
 
         <p className="product-description">
           {product.description}
