@@ -898,6 +898,13 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.admin-field input[type='file'] {
+  min-height: auto;
+  padding: 10px;
+  background: var(--paper);
+  cursor: pointer;
+}
+
 .admin-field input,
 .admin-field textarea,
 .admin-field select {
@@ -909,13 +916,6 @@ a:focus-visible {
   background: var(--white);
   color: var(--ink);
   font: inherit;
-}
-
-.admin-field input[type='file'] {
-  min-height: auto;
-  padding: 10px;
-  background: var(--paper);
-  cursor: pointer;
 }
 
 .admin-field textarea {

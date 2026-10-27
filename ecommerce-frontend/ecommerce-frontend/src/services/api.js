@@ -1,9 +1,11 @@
+
 import axios from 'axios'
 
 let bearerToken = null
+const apiBaseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: `${apiBaseUrl}/api`,
 })
 
 api.interceptors.request.use((config) => {

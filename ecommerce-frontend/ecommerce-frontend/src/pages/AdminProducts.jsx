@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Loading from '../components/Loading.jsx'
 import api from '../services/api.js'
 
+const allowedImageTypes = ['image/png', 'image/jpeg', 'image/webp']
+const maxImageSize = 5 * 1024 * 1024
+
 const emptyForm = {
   name: '',
   description: '',
@@ -12,10 +15,13 @@ const emptyForm = {
 }
 
 function getErrorMessage(error, fallback) {
-  return error?.response?.data?.message
-    || error?.response?.data?.error
-    || error.message
-    || fallback
+  const responseData = error?.response?.data
+  if (typeof responseData === 'string' && responseData.trim()) return responseData
+
+  const backendMessage = responseData?.message || responseData?.error
+  if (typeof backendMessage === 'string' && backendMessage.trim()) return backendMessage
+
+  return error?.message || fallback
 }
 
 function AdminProducts() {
@@ -27,6 +33,7 @@ function AdminProducts() {
   const [form, setForm] = useState(emptyForm)
   const [selectedImage, setSelectedImage] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
+  const [imageSelectionError, setImageSelectionError] = useState('')
   const imageInputRef = useRef(null)
   const [editingId, setEditingId] = useState(null)
   const [formErrors, setFormErrors] = useState({})
@@ -36,8 +43,9 @@ function AdminProducts() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
 
-  useEffect(() => () => {
-    if (imagePreview) URL.revokeObjectURL(imagePreview)
+  useEffect(() => {
+    if (!imagePreview.startsWith('blob:')) return undefined
+    return () => URL.revokeObjectURL(imagePreview)
   }, [imagePreview])
 
   const loadProducts = useCallback(async () => {
@@ -102,10 +110,16 @@ function AdminProducts() {
     setSuccessMessage('')
   }
 
-  function clearSelectedImage() {
+  function handleImageUrlChange(event) {
+    const { value } = event.target
+    setForm((current) => ({ ...current, imageUrl: value }))
+    setFormErrors((current) => ({ ...current, image: '' }))
+    setImageSelectionError('')
+    setImagePreview(value)
     setSelectedImage(null)
-    setImagePreview('')
     if (imageInputRef.current) imageInputRef.current.value = ''
+    setFormError('')
+    setSuccessMessage('')
   }
 
   function startEditing(product) {
@@ -119,6 +133,7 @@ function AdminProducts() {
       categoryId: String(product.category?.id ?? ''),
       imageUrl: product.imageUrl ?? '',
     })
+    setImagePreview(product.imageUrl ?? '')
     setFormErrors({})
     setFormError('')
     setSuccessMessage('')
@@ -127,6 +142,7 @@ function AdminProducts() {
 
   function resetForm() {
     setForm(emptyForm)
+    setImagePreview('')
     clearSelectedImage()
     setEditingId(null)
     setFormErrors({})
@@ -134,20 +150,42 @@ function AdminProducts() {
     setSuccessMessage('')
   }
 
+  function clearSelectedImage() {
+    setSelectedImage(null)
+    setImageSelectionError('')
+    if (imageInputRef.current) imageInputRef.current.value = ''
+  }
+
   function handleImageSelect(event) {
     const file = event.target.files?.[0] ?? null
     setFormError('')
     setSuccessMessage('')
+    setImageSelectionError('')
 
-    if (file && !file.type.startsWith('image/')) {
-      clearSelectedImage()
-      setFormErrors((current) => ({ ...current, image: 'Choose a valid image file.' }))
+    if (!file) {
+      setSelectedImage(null)
+      setImagePreview(form.imageUrl)
+      return
+    }
+    if (!allowedImageTypes.includes(file.type)) {
+      setSelectedImage(null)
+      setImagePreview(form.imageUrl)
+      setImageSelectionError('Choose a JPG, PNG, or WebP image.')
+      event.target.value = ''
+      return
+    }
+    if (file.size > maxImageSize) {
+      setSelectedImage(null)
+      setImagePreview(form.imageUrl)
+      setImageSelectionError('Image must be 5 MB or smaller.')
       event.target.value = ''
       return
     }
 
     setSelectedImage(file)
-    setImagePreview(file ? URL.createObjectURL(file) : '')
+    setForm((current) => ({ ...current, imageUrl: '' }))
+    setImagePreview(URL.createObjectURL(file))
+    setImageSelectionError('')
     setFormErrors((current) => ({ ...current, image: '' }))
   }
 
@@ -167,10 +205,27 @@ function AdminProducts() {
     if (!form.categoryId || !categories.some((category) => category.id === Number(form.categoryId))) {
       errors.categoryId = 'Choose a valid category.'
     }
-    if (!selectedImage && !form.imageUrl.trim()) errors.image = 'Choose a product image.'
+    if (!selectedImage && !form.imageUrl.trim()) {
+      errors.image = imageSelectionError || 'Choose a product image file or enter an image URL.'
+    }
+
+    if (form.imageUrl.trim() && !isValidImageUrl(form.imageUrl.trim())) {
+      errors.image = 'Enter a valid image URL starting with http://, https://, or /.'
+    }
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
+  }
+
+  function isValidImageUrl(value) {
+    if (value.startsWith('/')) return true
+
+    try {
+      const url = new URL(value)
+      return url.protocol === 'http:' || url.protocol === 'https:'
+    } catch {
+      return false
+    }
   }
 
   async function handleSubmit(event) {
@@ -179,13 +234,6 @@ function AdminProducts() {
     setSuccessMessage('')
 
     if (!validateForm()) return
-
-    if (selectedImage) {
-      setFormError(
-        'This image is only previewed and has not been uploaded. The backend currently accepts imageUrl text and does not provide a verified file-upload endpoint, so the product was not submitted. Backend image-upload support is required before a selected file can be saved.',
-      )
-      return
-    }
 
     const productData = {
       name: form.name.trim(),
@@ -198,16 +246,31 @@ function AdminProducts() {
 
     setIsSubmitting(true)
     try {
-      if (editingId === null) {
+      if (selectedImage) {
+        const multipartData = new FormData()
+        multipartData.append('product', new Blob([JSON.stringify(productData)], { type: 'application/json' }))
+        multipartData.append('image', selectedImage)
+
+        if (editingId === null) {
+          await api.post('/products/with-image', multipartData)
+        } else {
+          await api.put(`/products/${editingId}/with-image`, multipartData)
+        }
+      } else if (editingId === null) {
         await api.post('/products', productData)
-        setSuccessMessage('Product created successfully.')
       } else {
         await api.put(`/products/${editingId}`, productData)
+      }
+
+      if (editingId === null) {
+        setSuccessMessage('Product created successfully.')
+      } else {
         setSuccessMessage('Product updated successfully.')
       }
 
       setForm(emptyForm)
       clearSelectedImage()
+      setImagePreview('')
       setEditingId(null)
       setFormErrors({})
       await refreshProducts()
@@ -445,35 +508,50 @@ function AdminProducts() {
             </div>
 
             <div className="admin-field admin-field-wide">
-              <label htmlFor="admin-product-image-file">Product image</label>
+              <label htmlFor="admin-product-image-file">Choose File</label>
               <input
                 id="admin-product-image-file"
-                name="imageFile"
+                name="image"
                 ref={imageInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 onChange={handleImageSelect}
+                aria-invalid={Boolean(formErrors.image || imageSelectionError)}
               />
               <span className="admin-field-hint">
-                The image is previewed locally. Saving the selected file requires image-upload support in the backend.
+                Select a JPG, PNG, or WebP image up to 5 MB.
               </span>
+              <label htmlFor="admin-product-image-url">Image URL</label>
+              <input
+                id="admin-product-image-url"
+                name="imageUrl"
+                type="url"
+                placeholder="https://example.com/image.jpg"
+                value={form.imageUrl}
+                onChange={handleImageUrlChange}
+                aria-invalid={Boolean(formErrors.image)}
+              />
+              <span className="admin-field-hint">Choose a file or enter an image URL; you do not need both.</span>
               {imagePreview && (
                 <div className="admin-image-preview">
                   <img
-                    key={imagePreview}
                     src={imagePreview}
-                    alt="Selected product image preview"
+                    alt={selectedImage ? 'Selected product image preview' : 'Current product image'}
                   />
                 </div>
               )}
-              {formErrors.image && <span className="field-error">{formErrors.image}</span>}
+              {(imageSelectionError || formErrors.image) && (
+                <span className="field-error">{imageSelectionError || formErrors.image}</span>
+              )}
             </div>
           </div>
 
           {formError && <p className="admin-notice error" role="alert">{formError}</p>}
           <div className="admin-form-actions">
             <button className="button-primary" type="submit" disabled={isSubmitting || categories.length === 0}>
-              {isSubmitting ? 'Saving...' : editingId === null ? 'Add Product' : 'Save changes'}
+              {isSubmitting
+                ? selectedImage ? 'Uploading and saving...' : 'Saving...'
+                : editingId === null ? 'Add Product' : 'Save changes'}
             </button>
             {categories.length === 0 && (
               <p className="field-error">Products cannot be saved until a category is available.</p>
