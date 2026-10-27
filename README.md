@@ -141,7 +141,7 @@ http://localhost:5173
 Use the following credentials to test admin functionality, including product management.
 
 - **Email:** `admin@gmail.com`
-- **Password:** `pass-admin`
+- **Password:** `admin`
 
 🌐 **Live Website:** https://market-moss-e-commerce-6zyl.vercel.app/products
 
