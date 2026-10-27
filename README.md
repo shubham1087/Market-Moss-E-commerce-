@@ -135,3 +135,10 @@ http://localhost:5173
 - Add payment gateway integration.
 - Improve automated testing and error handling.
 - Add product search
+
+- ## 🌐 Live Demo
+
+**Market & Moss – E-commerce Website:**  
+https://market-moss-e-commerce-6zyl.vercel.app/products
+
+Explore the live application to browse products and test the shopping experience.
