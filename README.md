@@ -136,6 +136,17 @@ http://localhost:5173
 - Improve automated testing and error handling.
 - Add product search
 
+- ## 🔐 Admin Demo Access
+
+Use the following credentials to test admin functionality, including product management.
+
+- **Email:** `admin@gmail.com`
+- **Password:** `pass-admin`
+
+🌐 **Live Website:** https://market-moss-e-commerce-6zyl.vercel.app/products
+
+**Note:** Demo access is intended for evaluation purposes only.
+
 - ## 🌐 Live Demo
 
 **Market & Moss – E-commerce Website:**  
